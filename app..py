@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 # Configuration de la page
 st.set_page_config(
@@ -16,7 +15,6 @@ def local_css():
     .main-header { font-size: 2.5rem; color: #333; text-align: center; margin-bottom: 1rem; font-weight: bold; }
     .sub-header { font-size: 1.8rem; color: #555; margin-top: 2rem; margin-bottom: 1rem; font-weight: bold; }
     .stDataFrame { border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    .chart-container { background-color: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -51,7 +49,6 @@ if 'prix_vente' not in st.session_state:
         "Design logo & packaging": 2000.0,
         "Ordinateur": 10000.0
     }
-
 charges_emojis = {
     "Hébergement site": "🌐",
     "Marketing": "📣",
@@ -63,9 +60,7 @@ charges_emojis = {
 # Calcul indicateurs
 
 def calculer_indicateurs():
-    revenus = {}
-    couts = {}
-    marges = {}
+    revenus, couts, marges = {}, {}, {}
     for p in st.session_state.produits:
         rev = st.session_state.prix_vente[p] * st.session_state.commandes_jour[p] * st.session_state.jours_activite
         cost = st.session_state.cout_unitaire[p] * st.session_state.commandes_jour[p] * st.session_state.jours_activite
@@ -121,8 +116,8 @@ df_metrics = pd.DataFrame({
     'Valeur': [
         f"{ind['profit_net']:.2f} Dh",
         f"{ind['profit_par']:.2f} Dh",
-        f"{ind['roi_annuel']:.2f}",
-        f"{ind['marge_nette']:.2f}"
+        f"{ind['roi_annuel']:.2f} %",
+        f"{ind['marge_nette']:.2f} %"
     ]
 })
 st.dataframe(df_metrics.set_index('Métrique'), use_container_width=True)
@@ -138,18 +133,12 @@ with col3:
     st.session_state.nb_associes = st.number_input("Nombre d'associés", 1, 10, st.session_state.nb_associes)
 ind = calculer_indicateurs()
 
-# 3. Tableau de bord avec Plotly
+# 3. Tableau de bord financier
 st.subheader("📊 Tableau de bord financier")
-bar_data = pd.DataFrame({
-    'Catégorie': ['Revenu brut', 'Coût total', 'Bénéfice brut', 'Impôt', 'Profit net'],
-    'Montant': [
-        ind['revenu_brut'], ind['cout_total'], ind['benefice_brut'], ind['impot'], ind['profit_net']
-    ]
-})
-fig_bar = px.bar(bar_data, x='Catégorie', y='Montant', text='Montant')
-fig_bar.update_traces(texttemplate='%{text:.2f} Dh', textposition='outside')
-fig_bar.update_layout(uniformtext_minsize=8)
-st.plotly_chart(fig_bar, use_container_width=True)
+df_bar = pd.DataFrame({
+    'Montant': [ind['revenu_brut'], ind['cout_total'], ind['benefice_brut'], ind['impot'], ind['profit_net']]
+}, index=['Revenu brut','Coût total','Bénéfice brut','Impôt','Profit net'])
+st.bar_chart(df_bar)
 
 # 4. Détails par produit
 st.subheader("🍽️ Détails par produit")
@@ -157,38 +146,34 @@ prod_data = []
 for p, emoji in st.session_state.produits.items():
     prod_data.append({
         'Produit': f"{emoji} {p}",
-        'Prix U.': st.session_state.prix_vente[p],
-        'Coût U.': st.session_state.cout_unitaire[p],
-        'Cmd/jour': st.session_state.commandes_jour[p],
-        'Revenu M.': ind['revenus'][p],
-        'Coût M.': ind['couts'][p],
-        'Marge M.': ind['marges'][p]
+        'Prix U. (Dh)': st.session_state.prix_vente[p],
+        'Coût U. (Dh)': st.session_state.cout_unitaire[p],
+        'Cmd/j': st.session_state.commandes_jour[p],
+        'Revenu M. (Dh)': ind['revenus'][p],
+        'Coût M. (Dh)': ind['couts'][p],
+        'Marge M. (Dh)': ind['marges'][p]
     })
-df_prod = pd.DataFrame(prod_data)
+df_prod = pd.DataFrame(prod_data).set_index('Produit')
 st.dataframe(df_prod, use_container_width=True)
 
 # 5. Charges mensuelles
 st.subheader("💸 Charges mensuelles")
-chg_data = pd.DataFrame([{'Charge': f"{charges_emojis[k]} {k}", 'Montant': v}
-                         for k, v in st.session_state.charges_mensuelles.items()])
-fig_chg = px.pie(chg_data, names='Charge', values='Montant', hole=0.4)
-st.plotly_chart(fig_chg, use_container_width=True)
+df_chg = pd.DataFrame.from_dict(st.session_state.charges_mensuelles, orient='index', columns=['Montant (Dh)'])
+st.dataframe(df_chg, use_container_width=True)
 
 # 6. Investissements initiaux
 st.subheader("🏗️ Investissements initiaux")
-inv_data = pd.DataFrame([{'Investissement': i, 'Montant': v}
-                         for i, v in st.session_state.charges_investissement.items()])
-fig_inv = px.pie(inv_data, names='Investissement', values='Montant', hole=0.4)
-st.plotly_chart(fig_inv, use_container_width=True)
+df_inv = pd.DataFrame.from_dict(st.session_state.charges_investissement, orient='index', columns=['Montant (Dh)'])
+st.dataframe(df_inv, use_container_width=True)
 
 # 7. Analyse de rentabilité
 st.subheader("🔍 Analyse de rentabilité")
 col_a, col_b = st.columns(2)
 with col_a:
-    st.metric("Seuil de rentabilité", f"{ind['seuil_rentabilite']:.2f} Dh")
-    st.metric("Marge CV (%)", f"{ind['marge_cout_variable']:.2f}%")
+    st.metric("Seuil de rentabilité (Dh)", f"{ind['seuil_rentabilite']:.2f}")
+    st.metric("Marge CV (%)", f"{ind['marge_cout_variable']:.2f}")
 with col_b:
-    st.metric("ROI mensuel (%)", f"{ind['roi_mensuel']:.2f}%")
+    st.metric("ROI mensuel (%)", f"{ind['roi_mensuel']:.2f}")
     st.metric("Temps retour (mois)", f"{ind['temps_retour']:.1f}")
 
 # 8. Recommandations
